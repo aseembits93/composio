@@ -164,14 +164,10 @@ class FileHelper(WithLogger):
 
     def _file_uploadable(self, schema: t.Dict):
         if "allOf" in schema:
-            return any(
-                (
-                    _schema.get("file_uploadable", False)
-                    if isinstance(_schema, dict)
-                    else False
-                )
-                for _schema in schema["allOf"]
-            )
+            for _schema in schema["allOf"]:
+                if isinstance(_schema, dict) and _schema.get("file_uploadable", False):
+                    return True
+            return False
         return schema.get("file_uploadable", False)
 
     def _process_file_uploadable(self, schema: t.Dict):
