@@ -250,30 +250,28 @@ class FileHelper(WithLogger):
         )
 
     def _is_file_downloadable(self, schema: t.Dict) -> bool:
-        if "allOf" in schema:
-            return any(
-                (
-                    _schema.get("file_downloadable", False)
-                    if isinstance(_schema, dict)
-                    else False
-                )
-                for _schema in schema["allOf"]
-            )
+        all_of = schema.get("allOf")
+        if all_of is not None:
+            for _schema in all_of:
+                if isinstance(_schema, dict) and _schema.get("file_downloadable", False):
+                    return True
+            return False
         return schema.get("file_downloadable", False)
 
     def _find_file_downloadable_from_any_of(
         self, schemas: list[dict]
     ) -> t.Optional[t.Dict]:
         for schema in schemas:
-            if "type" not in schema or schema["type"] != "object":
+            if schema.get("type") != "object":
                 continue
 
             if self._is_file_downloadable(schema=schema):
                 return schema
 
             # Hack to avoid recursive check, maybe use recursion
-            if '"file_downloadable":true' in json.dumps(schema):
-                return schema
+            if self._contains_file_downloadable_true(schema):
+                if '"file_downloadable":true' in json.dumps(schema):
+                    return schema
 
         return None
 
@@ -328,3 +326,16 @@ class FileHelper(WithLogger):
                 request=t.cast(dict, response),
             ),
         )
+
+    def _contains_file_downloadable_true(self, obj) -> bool:
+        if isinstance(obj, dict):
+            if obj.get("file_downloadable") is True:
+                return True
+            for value in obj.values():
+                if self._contains_file_downloadable_true(value):
+                    return True
+        elif isinstance(obj, list):
+            for item in obj:
+                if self._contains_file_downloadable_true(item):
+                    return True
+        return False
