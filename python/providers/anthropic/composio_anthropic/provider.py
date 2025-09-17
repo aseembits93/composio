@@ -18,6 +18,7 @@ class AnthropicProvider(
     """
 
     def wrap_tool(self, tool: Tool) -> ToolParam:
+        # Inline the attribute access to avoid unnecessary local assignments
         return ToolParam(
             input_schema=tool.input_parameters,
             name=tool.slug,
@@ -25,7 +26,9 @@ class AnthropicProvider(
         )
 
     def wrap_tools(self, tools: t.Sequence[Tool]) -> list[ToolParam]:
-        return [self.wrap_tool(tool) for tool in tools]
+        # Use a local reference to the bound method for faster access in loop
+        wrap_tool = self.wrap_tool
+        return [wrap_tool(tool) for tool in tools]
 
     def execute_tool_call(
         self,
