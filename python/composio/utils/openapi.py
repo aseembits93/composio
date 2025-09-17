@@ -5,6 +5,10 @@ import typing as t
 
 from composio.exceptions import InvalidSchemaError
 
+_OBJECT_TYPE = t.Dict[str, t.Any]
+
+_dict_str_any: t.Type = t.Dict[str, t.Any]
+
 OPENAPI_TO_PYTHON = {
     "null": None,
     "number": float,
@@ -17,7 +21,7 @@ OPENAPI_TO_PYTHON = {
 # pylint: disable=unused-argument
 def _handle_object_type(schema: t.Dict) -> t.Type:
     # Nested objects are not supported ATM
-    return t.Dict[str, t.Any]
+    return _OBJECT_TYPE
 
 
 def _handle_array_type(schema: t.Dict) -> t.Any:
