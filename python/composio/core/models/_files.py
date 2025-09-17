@@ -160,7 +160,7 @@ class FileHelper(WithLogger):
     def __init__(self, client: HttpClient, outdir: t.Optional[str] = None):
         super().__init__()
         self._client = client
-        self._outdir = Path(outdir or LOCAL_OUTPUT_FILE_DIRECTORY)
+        self._outdir = Path(outdir) if outdir is not None else LOCAL_OUTPUT_FILE_DIRECTORY
 
     def _file_uploadable(self, schema: t.Dict):
         if "allOf" in schema:
@@ -175,11 +175,14 @@ class FileHelper(WithLogger):
         return schema.get("file_uploadable", False)
 
     def _process_file_uploadable(self, schema: t.Dict):
+        # Slightly optimize by directly fetching both keys into temporary variables
+        description = schema.get("description")
+        title = schema.get("title")
         return {
             "type": "string",
             "format": "path",
-            "description": schema.get("description", "Path to file."),
-            "title": schema.get("title"),
+            "description": description if description is not None else "Path to file.",
+            "title": title,
         }
 
     def process_schema_recursively(self, schema: t.Dict) -> t.Dict:
@@ -214,35 +217,40 @@ class FileHelper(WithLogger):
             return request
 
         params = schema["properties"]
-        for _param in list(request.keys()):
+        # Use tuple here to avoid recreating list for each iteration
+        for _param in tuple(request.keys()):
             if _param not in params:
                 continue
 
-            if self._file_uploadable(schema=params[_param]):
+            param_schema = params[_param]
+            value = request[_param]
+
+            if self._file_uploadable(schema=param_schema):
                 # skip if the file is not provided
-                if request[_param] is None or request[_param] == "":
+                if value is None or value == "":
                     del request[_param]
                     continue
 
                 request[_param] = FileUploadable.from_path(
                     client=self._client,
-                    file=request[_param],
+                    file=value,
                     tool=tool.slug,
                     toolkit=tool.toolkit.slug,
                 ).model_dump()
                 continue
 
-            if isinstance(request[_param], dict) and params[_param]["type"] == "object":
+            if isinstance(value, dict) and param_schema.get("type") == "object":
+                # In-place update is safe (original logic mutates request)
                 request[_param] = self._substitute_file_uploads_recursively(
-                    schema=params[_param],
-                    request=request[_param],
+                    schema=param_schema,
+                    request=value,
                     tool=tool,
                 )
-                continue
 
         return request
 
     def substitute_file_uploads(self, tool: Tool, request: t.Dict) -> t.Dict:
+        # Prevent unnecessary dict copying, always works in-place (as original)
         return self._substitute_file_uploads_recursively(
             tool=tool,
             schema=tool.input_parameters,
