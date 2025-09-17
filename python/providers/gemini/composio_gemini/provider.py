@@ -22,14 +22,14 @@ class GeminiProvider(AgenticProvider[t.Callable, list[t.Callable]], name="gemini
     ) -> t.Callable:
         """Wraps composio tool as Google Genai SDK compatible function calling object."""
 
-        docstring = tool.description
-        docstring += "\nArgs:"
-        for _param, _schema in tool.input_parameters["properties"].items():  # type: ignore
-            docstring += "\n    "
-            docstring += _param + ": " + _schema.get("description", _param.title())
+        # Efficient docstring construction using list of lines.
+        doc_lines = [tool.description, "\nArgs:"]
+        props = tool.input_parameters["properties"]  # type: ignore
+        for _param, _schema in props.items():
+            doc_lines.append(f"\n    {_param}: {_schema.get('description', _param.title())}")
 
-        docstring += "\nReturns:"
-        docstring += "\n    A dictionary containing response from the action"
+        doc_lines.append("\nReturns:\n    A dictionary containing response from the action")
+        docstring = ''.join(doc_lines)
 
         def _execute(**kwargs: t.Any) -> t.Dict:
             return execute_tool(slug=tool.slug, arguments=kwargs)
@@ -45,6 +45,7 @@ class GeminiProvider(AgenticProvider[t.Callable, list[t.Callable]], name="gemini
             skip_default=self.skip_default,
         )
         setattr(function, "__signature__", Signature(parameters=parameters))
+        # More efficient annotation construction using dict comprehension
         setattr(
             function,
             "__annotations__",

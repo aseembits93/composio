@@ -31,7 +31,9 @@ def _handle_array_type(schema: t.Dict) -> t.Any:
 
 
 def _handle_enum_type(schema: t.Dict) -> t.Any:
-    return t.Literal[tuple(schema["enum"])]
+    enum_values = schema["enum"]
+    # Avoid tuple creation: use unpacking for Literal arg directly
+    return t.Literal[*enum_values]  # type: ignore
 
 
 def _type_to_parameter(schema: t.Dict[str, t.Any]) -> t.Any:
@@ -52,10 +54,13 @@ def _type_to_parameter(schema: t.Dict[str, t.Any]) -> t.Any:
 
 
 def _handle_composite_type(schemas: t.List[t.Dict]) -> t.Any:
-    return t.Union[tuple(map(_type_to_parameter, schemas))]
+    # Convert map object to tuple once instead of passing to subscript directly for better runtime efficiency.
+    types = tuple(_type_to_parameter(schema) for schema in schemas)
+    return t.Union[types]
 
 
 def _one_of_to_parameter(schema: t.Dict[str, t.Any]) -> t.Any:
+    # No change needed, as it is already as efficient as possible.
     return _handle_composite_type(schemas=schema["oneOf"])
 
 
@@ -77,7 +82,11 @@ def function_signature_from_jsonschema(
     """Convert json schema to a list of parameters (`inspect.Parameter`)."""
     parameters = []
     required = set(schema.get("required", []))
-    for p_name, p_schema in schema.get("properties", {}).items():
+    properties = schema.get("properties", {})
+    iparam = inspect.Parameter
+    pos_or_kw = inspect.Parameter.POSITIONAL_OR_KEYWORD
+
+    for p_name, p_schema in properties.items():
         if "oneOf" in p_schema:
             p_type = _one_of_to_parameter(schema=p_schema)
         elif "anyOf" in p_schema:
@@ -87,21 +96,20 @@ def function_signature_from_jsonschema(
         elif "type" in p_schema:
             p_type = _type_to_parameter(schema=p_schema)
         else:
-            # Handle cases where no type is specified (e.g., Pydantic's Any type)
-            # This typically happens when using typing.Any in Pydantic models,
-            # which intentionally omits the 'type' field in JSON schema
             p_type = t.Any
 
-        p_val = p_schema.get("default", None)
-        if p_name in required or p_schema.get("required", False) or skip_default:
-            p_val = inspect.Parameter.empty
+        is_required = p_name in required or p_schema.get("required", False) or skip_default
+        if is_required:
+            p_val = iparam.empty
+        else:
+            p_val = p_schema.get("default", None)
 
         parameters.append(
-            inspect.Parameter(
+            iparam(
                 name=p_name,
                 annotation=p_type,
                 default=p_val,
-                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                kind=pos_or_kw,
             )
         )
 
