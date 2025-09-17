@@ -144,13 +144,10 @@ class AuthScheme:
         """
         return {
             "auth_scheme": "API_KEY",
-            "val": t.cast(
-                connected_account_create_params.ConnectionStateUnionMember3Val,
-                {
-                    **options,
-                    "status": "ACTIVE",
-                },
-            ),
+            "val": {
+                **options,
+                "status": "ACTIVE",
+            },
         }
 
     def basic(
