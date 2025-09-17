@@ -1,6 +1,4 @@
 """Custom Tools module"""
-
-import functools
 import inspect
 import typing as t
 
@@ -163,13 +161,19 @@ class CustomTools:
         except KeyError:
             return None
 
-    @t.overload
-    def register(self, f: CustomToolProtocol) -> CustomTool: ...
+    def register(self, f: CustomToolProtocol) -> CustomTool:
+        """Register a custom tool."""
+        if f is not None:
+            return self._wrap_tool(f, toolkit)
+        return lambda fn: self._wrap_tool(fn, toolkit)
 
-    @t.overload
     def register(
         self, *, toolkit: t.Optional[str] = None
-    ) -> t.Callable[[CustomToolWithProxyProtocol], CustomTool]: ...
+    ) -> t.Callable[[CustomToolWithProxyProtocol], CustomTool]:
+        """Register a custom tool."""
+        if f is not None:
+            return self._wrap_tool(f, toolkit)
+        return lambda fn: self._wrap_tool(fn, toolkit)
 
     def register(
         self,
@@ -184,7 +188,7 @@ class CustomTools:
         """Register a custom tool."""
         if f is not None:
             return self._wrap_tool(f, toolkit)
-        return functools.partial(self._wrap_tool, toolkit=toolkit)
+        return lambda fn: self._wrap_tool(fn, toolkit)
 
     def _wrap_tool(
         self,
