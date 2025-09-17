@@ -507,4 +507,9 @@ _types = {
 
 
 def guess(file: t.Union[str, Path]) -> str:
-    return _types.get(Path(file).suffix, _default)
+    if isinstance(file, str):
+        i = file.rfind('.')
+        if i > 0:
+            return _types.get(file[i:], _default)
+        return _default
+    return _types.get(file.suffix, _default)
