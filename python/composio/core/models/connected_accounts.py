@@ -210,14 +210,14 @@ class AuthScheme:
         """
         Create a new connected account using no auth.
         """
+        # Optimize by building the dict directly rather than via ** unpacking for small dicts
+        result = dict(options)
+        result["status"] = "ACTIVE"
         return {
             "auth_scheme": "NO_AUTH",
             "val": t.cast(
                 connected_account_create_params.ConnectionStateUnionMember7Val,
-                {
-                    **options,
-                    "status": "ACTIVE",
-                },
+                result,
             ),
         }
 
