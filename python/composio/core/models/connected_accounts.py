@@ -108,14 +108,13 @@ class AuthScheme:
         """
         Create a new connected account using OAuth 1.0.
         """
+        val = options.copy()
+        val["status"] = "INITIALISING"
         return {
             "auth_scheme": "OAUTH2",
             "val": t.cast(
                 connected_account_create_params.ConnectionStateUnionMember1Val,
-                {
-                    **options,
-                    "status": "INITIALISING",
-                },
+                val,
             ),
         }
 
