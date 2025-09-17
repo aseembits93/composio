@@ -66,9 +66,10 @@ class AnthropicProvider(
         if isinstance(response, dict):
             response = ToolsBetaMessage(**response)
 
+        tool_types = (ToolUseBlock, BetaToolUseBlock)
         outputs = []
         for content in response.content:
-            if isinstance(content, (ToolUseBlock, BetaToolUseBlock)):
+            if isinstance(content, tool_types):
                 outputs.append(
                     self.execute_tool_call(
                         user_id=user_id,
