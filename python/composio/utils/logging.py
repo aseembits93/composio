@@ -98,12 +98,19 @@ class _VerbosityWrapper:
 
 def _parse_log_level_from_env(default: int) -> int:
     """Parse log level from environment."""
+    # Uses fast-path for default, and avoids repeated lookups and constructions
     level = os.environ.get(ENV_COMPOSIO_LOGGING_LEVEL)
     if level is None:
         return default
 
+    level_str = level.lower()
+    # Avoid constructing LogLevel unnecessarily
+    levels = _LEVELS
     try:
-        return _LEVELS[LogLevel(level.lower())]
+        loglevel_enum = LogLevel.__members__.get(level_str.upper())
+        if loglevel_enum is None:
+            return default
+        return levels[loglevel_enum]
     except (ValueError, KeyError):
         return default
 
