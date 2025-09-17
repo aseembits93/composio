@@ -223,10 +223,11 @@ def pydantic_model_from_param_schema(param_schema: t.Dict) -> t.Type:
         raise ValueError(f"Missing 'title' in param_schema: {param_schema}")
 
     param_title = str(param_schema["title"]).replace(" ", "")
-    required_props = param_schema.get("required", [])
+    required_props = set(param_schema.get("required", []))
 
-    if param_schema.get("type") == "array":
-        # print("param_schema inside array - ", param_schema)
+    param_type = param_schema.get("type")
+
+    if param_type == "array":
         item_schema = param_schema.get("items")
         if item_schema:
             ItemType = t.cast(
@@ -238,15 +239,22 @@ def pydantic_model_from_param_schema(param_schema: t.Dict) -> t.Type:
             return t.List[ItemType]  # type: ignore
         return t.List
 
-    for prop_name, prop_info in param_schema.get("properties", {}).items():
+    properties = param_schema.get("properties")
+    if not properties:
+        return t.Dict
+
+    # Precompute reserved set for ultra-fast checks in tight loop below
+    reserved_set = set(reserved_names)
+    container_type_set = set(CONTAINER_TYPE)
+    pttype_dict = PYDANTIC_TYPE_TO_PYTHON_TYPE
+    fallback_dict = FALLBACK_VALUES
+
+    for prop_name, prop_info in properties.items():
         prop_type = prop_info["type"]
         prop_title = prop_info["title"].replace(" ", "")
-        prop_default = prop_info.get("default", FALLBACK_VALUES[prop_type])
-        if (
-            prop_type in PYDANTIC_TYPE_TO_PYTHON_TYPE
-            and prop_type not in CONTAINER_TYPE
-        ):
-            signature_prop_type = PYDANTIC_TYPE_TO_PYTHON_TYPE[prop_type]
+        prop_default = prop_info.get("default", fallback_dict[prop_type])
+        if prop_type in pttype_dict and prop_type not in container_type_set:
+            signature_prop_type = pttype_dict[prop_type]
         else:
             signature_prop_type = pydantic_model_from_param_schema(prop_info)
 
@@ -257,13 +265,14 @@ def pydantic_model_from_param_schema(param_schema: t.Dict) -> t.Type:
         }
 
         # Add alias if the field name is a reserved Pydantic name
-        if prop_name in reserved_names:
+        if prop_name in reserved_set:
             field_kwargs["alias"] = prop_name
             field_kwargs["title"] = f"{prop_name}_"
         else:
             field_kwargs["title"] = prop_title
 
-        if prop_name in required_props or prop_info.get("required", False):
+        is_required = prop_name in required_props or prop_info.get("required", False)
+        if is_required:
             required_fields[prop_name] = (
                 signature_prop_type,
                 Field(..., **field_kwargs),
@@ -309,50 +318,49 @@ def get_signature_format_from_schema_params(
     default_parameters = []
     none_default_parameters = []
 
-    required_params = schema_params.get("required", [])
+    required_params = set(schema_params.get("required", []))
     schema_params_object = schema_params.get("properties", {})
+    pttype_dict = PYDANTIC_TYPE_TO_PYTHON_TYPE
+    fallback_dict = FALLBACK_VALUES
+
     for param_name, param_schema in schema_params_object.items():
-        param_type = param_schema.get("type", None)
-        param_oneOf = param_schema.get("oneOf", None)
-        param_anyOf = param_schema.get("anyOf", None)
-        param_allOf = param_schema.get("allOf", None)
+        param_type = param_schema.get("type")
+        param_oneOf = param_schema.get("oneOf")
+        param_anyOf = param_schema.get("anyOf")
+        param_allOf = param_schema.get("allOf")
+        # Fast path for allOf single type
         if param_allOf is not None and len(param_allOf) == 1:
-            param_type = param_allOf[0].get("type", None)
+            param_type = param_allOf[0].get("type")
         if param_oneOf is not None or param_anyOf is not None:
-            param_types = [ptype.get("type") for ptype in (param_oneOf or param_anyOf)]
-            if len(param_types) == 1:
-                annotation = PYDANTIC_TYPE_TO_PYTHON_TYPE[param_types[0]]
-            elif len(param_types) == 2:
-                # Check as redefinition and union was incompatible
-                # @karan to check if this is the right way to do it
-                t1: t.Type = PYDANTIC_TYPE_TO_PYTHON_TYPE[param_types[0]]  # type: ignore
-                t2: t.Type = PYDANTIC_TYPE_TO_PYTHON_TYPE[param_types[1]]  # type: ignore
+            combo = param_oneOf or param_anyOf
+            param_types = [ptype.get("type") for ptype in combo]
+            l = len(param_types)
+            if l == 1:
+                annotation = pttype_dict[param_types[0]]
+            elif l == 2:
+                t1: t.Type = pttype_dict[param_types[0]]  # type: ignore
+                t2: t.Type = pttype_dict[param_types[1]]  # type: ignore
                 annotation: t.Type = t.Union[t1, t2]  # type: ignore
-            elif len(param_types) == 3:
-                t1: t.Type = PYDANTIC_TYPE_TO_PYTHON_TYPE[param_types[0]]  # type: ignore
-                t2: t.Type = PYDANTIC_TYPE_TO_PYTHON_TYPE[param_types[1]]  # type: ignore
-                t3: t.Type = PYDANTIC_TYPE_TO_PYTHON_TYPE[param_types[2]]  # type: ignore
+            elif l == 3:
+                t1: t.Type = pttype_dict[param_types[0]]  # type: ignore
+                t2: t.Type = pttype_dict[param_types[1]]  # type: ignore
+                t3: t.Type = pttype_dict[param_types[2]]  # type: ignore
                 annotation: t.Type = t.Union[t1, t2, t3]  # type: ignore
             else:
                 raise ValueError("Invalid 'oneOf' schema")
             param_default = param_schema.get("default", "")
-        elif param_type in PYDANTIC_TYPE_TO_PYTHON_TYPE:
-            annotation = PYDANTIC_TYPE_TO_PYTHON_TYPE[param_type]
-            param_default = param_schema.get("default", FALLBACK_VALUES[param_type])
+        elif param_type in pttype_dict:
+            annotation = pttype_dict[param_type]
+            param_default = param_schema.get("default", fallback_dict[param_type])
         else:
             annotation = pydantic_model_from_param_schema(param_schema)
             if param_type is None or param_type == "null":
                 param_default = None
             else:
-                param_default = param_schema.get("default", FALLBACK_VALUES[param_type])
+                param_default = param_schema.get("default", fallback_dict.get(param_type))
 
-        default = param_default
         required = param_schema.get("required", False) or param_name in required_params
-        if required:
-            default = Parameter.empty
-
-        if skip_default:
-            default = Parameter.empty
+        default = Parameter.empty if required or skip_default else param_default
 
         parameter = Parameter(
             name=param_name,
@@ -362,8 +370,8 @@ def get_signature_format_from_schema_params(
         )
         if required:
             default_parameters.append(parameter)
-            continue
-        none_default_parameters.append(parameter)
+        else:
+            none_default_parameters.append(parameter)
     return default_parameters + none_default_parameters
 
 
