@@ -227,15 +227,11 @@ class AuthScheme:
         """
         Create a new connected account using Cal.com auth.
         """
+        val = dict(options)
+        val["status"] = "ACTIVE"
         return {
             "auth_scheme": "CALCOM_AUTH",
-            "val": t.cast(
-                connected_account_create_params.ConnectionStateUnionMember8Val,
-                {
-                    **options,
-                    "status": "ACTIVE",
-                },
-            ),
+            "val": val,
         }
 
     def billcom_auth(
