@@ -24,7 +24,7 @@ def get_toolkit_version(
         return toolkit_versions
 
     # If toolkit_versions is a dict mapping, look up the specific toolkit version
-    if isinstance(toolkit_versions, dict) and len(toolkit_versions) > 0:
+    if type(toolkit_versions) is dict and toolkit_versions:
         return toolkit_versions.get(toolkit_slug, "latest")
 
     # Else use 'latest'
