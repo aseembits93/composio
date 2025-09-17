@@ -54,11 +54,13 @@ def get_toolkit_versions(
         return default_versions
 
     # Check if there are envs similar to COMPOSIO_TOOLKIT_VERSION_GITHUB then extract the toolkit name
-    toolkit_versions_from_env: ToolkitVersions = {}
-    for key, value in os.environ.items():
-        if key.startswith("COMPOSIO_TOOLKIT_VERSION_"):
-            toolkit_name = key.replace("COMPOSIO_TOOLKIT_VERSION_", "")
-            toolkit_versions_from_env[toolkit_name.lower()] = value
+    prefix = "COMPOSIO_TOOLKIT_VERSION_"
+    prefix_len = len(prefix)
+    toolkit_versions_from_env: ToolkitVersions = {
+        key[prefix_len:].lower(): value
+        for key, value in os.environ.items()
+        if key.startswith(prefix)
+    }
 
     # If the provided default versions is a dict, normalize the keys to be lower case
     # Use user provided values as overrides
