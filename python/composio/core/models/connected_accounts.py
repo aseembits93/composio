@@ -176,15 +176,11 @@ class AuthScheme:
         """
         Create a new connected account using a bearer token.
         """
+        val = options.copy()
+        val["status"] = "ACTIVE"
         return {
             "auth_scheme": "BEARER_TOKEN",
-            "val": t.cast(
-                connected_account_create_params.ConnectionStateUnionMember5Val,
-                {
-                    **options,
-                    "status": "ACTIVE",
-                },
-            ),
+            "val": val,
         }
 
     def google_service_account(
