@@ -161,13 +161,7 @@ class AuthScheme:
         """
         return {
             "auth_scheme": "BASIC",
-            "val": t.cast(
-                connected_account_create_params.ConnectionStateUnionMember4Val,
-                {
-                    **options,
-                    "status": "ACTIVE",
-                },
-            ),
+            "val": dict(options, status="ACTIVE"),
         }
 
     def bearer_token(
