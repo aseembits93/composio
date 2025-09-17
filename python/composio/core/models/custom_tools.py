@@ -158,10 +158,7 @@ class CustomTools:
 
     def get(self, slug: str) -> t.Optional[CustomTool]:
         """Get a custom tool by its slug."""
-        try:
-            return self.custom_tools_registry[slug]
-        except KeyError:
-            return None
+        return self.custom_tools_registry.get(slug, None)
 
     @t.overload
     def register(self, f: CustomToolProtocol) -> CustomTool: ...
