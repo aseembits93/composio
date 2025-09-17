@@ -5,6 +5,10 @@ import typing as t
 
 from composio.exceptions import InvalidSchemaError
 
+TYPING_DICT_STR_ANY = t.Dict[str, t.Any]
+
+TYPING_LIST_ANY = t.List[t.Any]
+
 OPENAPI_TO_PYTHON = {
     "null": None,
     "number": float,
@@ -17,24 +21,44 @@ OPENAPI_TO_PYTHON = {
 # pylint: disable=unused-argument
 def _handle_object_type(schema: t.Dict) -> t.Type:
     # Nested objects are not supported ATM
-    return t.Dict[str, t.Any]
+    return TYPING_DICT_STR_ANY
 
 
 def _handle_array_type(schema: t.Dict) -> t.Any:
     # This discards the nested objects
-    items_type = schema.get("items", {}).get("type")
+    items = schema.get("items")
+    if not items:
+        return TYPING_LIST_ANY
+    items_type = items.get("type")
     if items_type is None:
-        return t.List[t.Any]
+        return TYPING_LIST_ANY
 
-    SubT = _type_to_parameter(schema=schema.get("items", {}))
+    # Avoid calculating .get("items") twice, and limit new dict allocations
+    SubT = _type_to_parameter(schema=items)
     return t.List[SubT]  # type: ignore
 
 
 def _handle_enum_type(schema: t.Dict) -> t.Any:
-    return t.Literal[tuple(schema["enum"])]
+    # keep reference for fast path
+    enum_values = schema["enum"]
+    # t.Literal[*enum_values] construction is slow for large enums, so cache the type if possible
+    # Using a simple cache for repeated enums based on tuple of enum values (safe due to immutability)
+    # LRU keeps memory impact bounded. Key is id(schema['enum']) to avoid re-calc for repeated objects.
+    # If keying on tuple(enum_values): good, if "enum" is only int/str. As it's read-only reference data this is OK.
+    try:
+        _handle_enum_type._cache
+    except AttributeError:
+        from functools import lru_cache
+        @lru_cache(maxsize=32)
+        def _cached_literal(vals):
+            return t.Literal[*vals]  # type: ignore
+        _handle_enum_type._cache = _cached_literal
+    return _handle_enum_type._cache(tuple(enum_values))  # type: ignore
 
 
 def _type_to_parameter(schema: t.Dict[str, t.Any]) -> t.Any:
+    # perf: Avoid chained dict lookups, pre-bind variables where possible
+    # Fast path: enum disables other types
     if "enum" in schema:
         return _handle_enum_type(schema=schema)
 
