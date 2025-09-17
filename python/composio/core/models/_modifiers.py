@@ -80,6 +80,9 @@ class Modifier:
         self.tools = tools
         self.type = type_
         self.toolkits = toolkits
+        # Precompute tool and toolkit sets for O(1) lookup.
+        self._tools_set = set(tools) if tools else None
+        self._toolkits_set = set(toolkits) if toolkits else None
 
     def apply(
         self,
@@ -94,8 +97,8 @@ class Modifier:
         # If no tools or toolkits are provided, apply the modifier to all tools
         if (
             self.type == modifer_type
-            and len(self.tools) == 0
-            and len(self.toolkits) == 0
+            and (self._tools_set is None or not self._tools_set)
+            and (self._toolkits_set is None or not self._toolkits_set)
         ):
             return self.modifier(tool, toolkit, data)  # type: ignore
 
@@ -103,8 +106,10 @@ class Modifier:
         # toolkits, return the data as is
         if (
             self.type != modifer_type
-            or tool not in self.tools
-            and toolkit not in self.toolkits
+            or (
+                (self._tools_set is not None and tool not in self._tools_set)
+                and (self._toolkits_set is not None and toolkit not in self._toolkits_set)
+            )
         ):
             return data
 
