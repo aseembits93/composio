@@ -203,7 +203,7 @@ class CustomTools:
         user_id: t.Optional[str] = None,
     ) -> t.Dict:
         """Execute a custom tool."""
-        custom_tool = self.get(slug)
+        custom_tool = self.custom_tools_registry.get(slug)
         if custom_tool is None:
             raise NotFoundError(f"Custom tool with slug {slug} not found")
         return custom_tool(**request, user_id=user_id)
