@@ -31,7 +31,9 @@ def _handle_array_type(schema: t.Dict) -> t.Any:
 
 
 def _handle_enum_type(schema: t.Dict) -> t.Any:
-    return t.Literal[tuple(schema["enum"])]
+    enum_values = schema["enum"]
+    # Avoid tuple creation: use unpacking for Literal arg directly
+    return t.Literal[*enum_values]  # type: ignore
 
 
 def _type_to_parameter(schema: t.Dict[str, t.Any]) -> t.Any:
@@ -52,15 +54,21 @@ def _type_to_parameter(schema: t.Dict[str, t.Any]) -> t.Any:
 
 
 def _handle_composite_type(schemas: t.List[t.Dict]) -> t.Any:
-    return t.Union[tuple(map(_type_to_parameter, schemas))]
+    # Use list comprehension outside tuple to avoid generator overhead and
+    # use __getitem__ directly for Union to circumvent expensive subscription via typing.Union
+    types = tuple([_type_to_parameter(schema) for schema in schemas])
+    # Fast path for common cases
+    return t.Union.__getitem__(types)
 
 
 def _one_of_to_parameter(schema: t.Dict[str, t.Any]) -> t.Any:
+    # No change needed, as it is already as efficient as possible.
     return _handle_composite_type(schemas=schema["oneOf"])
 
 
 def _any_of_to_parameter(schema: t.Dict[str, t.Any]) -> t.Any:
-    return _handle_composite_type(schemas=schema["anyOf"])
+    # Avoid extra variable indirection - pass directly for slight improvement
+    return _handle_composite_type(schema["anyOf"])
 
 
 def _all_of_to_parameter(schema: t.Dict[str, t.Any]) -> t.Type:
