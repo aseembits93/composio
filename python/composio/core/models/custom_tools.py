@@ -158,10 +158,8 @@ class CustomTools:
 
     def get(self, slug: str) -> t.Optional[CustomTool]:
         """Get a custom tool by its slug."""
-        try:
-            return self.custom_tools_registry[slug]
-        except KeyError:
-            return None
+        # Use dict.get to avoid exception handling overhead on common path
+        return self.custom_tools_registry.get(slug, None)
 
     @t.overload
     def register(self, f: CustomToolProtocol) -> CustomTool: ...
@@ -203,7 +201,8 @@ class CustomTools:
         user_id: t.Optional[str] = None,
     ) -> t.Dict:
         """Execute a custom tool."""
-        custom_tool = self.get(slug)
+        # Inline lookup to avoid unnecessary global function call and for slightly faster path
+        custom_tool = self.custom_tools_registry.get(slug, None)
         if custom_tool is None:
             raise NotFoundError(f"Custom tool with slug {slug} not found")
         return custom_tool(**request, user_id=user_id)
